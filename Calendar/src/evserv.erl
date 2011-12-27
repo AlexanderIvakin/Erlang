@@ -110,6 +110,7 @@ loop(S) ->
 			E = orddict:fetch(Name, S#state.events),
 			send_to_clients({done, E#event.name, E#event.description},
 							S#state.clients),
+			io:format("Done: ~p~n", [Name]),
 			NewEvents = orddict:erase(Name, S#state.events),
 			loop(S#state{events = NewEvents})
 			;

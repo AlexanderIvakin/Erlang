@@ -5,7 +5,7 @@
 basic_test_() ->
 	{setup,
 	 fun() -> fibber:start() end,
-	 fun(Pid) -> fiber:shutdown(Pid) end,
+	 fun(Pid) -> fibber:shutdown(Pid) end,
 	 fun basic_generator/1}.
 		
 basic_generator(Pid) ->

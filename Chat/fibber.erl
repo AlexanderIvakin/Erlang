@@ -23,6 +23,7 @@ loop() ->
 			Caller ! {ok, fib(N)},
 			loop();
  		shutdown ->
+			io:format("Shutting down...~n"),
 			ok
 	end.
 	

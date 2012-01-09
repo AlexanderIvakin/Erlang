@@ -1,56 +1,96 @@
 -module(message_store).
--export([start/0, stop/0, run/1,
-		 save_message/2, find_messages/1,
-		 init_store/0]).
+
+-behaviour(gen_server).
+
 -include_lib("stdlib/include/qlc.hrl").
 
--define(SERVER, message_store).
+-define(SERVER, ?MODULE).
+
+%% API
+-export([start_link/0, save_message/2, find_messages/1, shutdown/0]).
 
 -record(chat_message,
 		{addressee,
 		 body,
 		 created_on}).
 
-save_message(Addressee, Body) ->
-	global:send(?SERVER, {save_msg, Addressee, Body}).
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+		 terminate/2, code_change/3]).
+		
+-record(state, {}).		
+		
+%% Client API
+
+start_link() ->
+	gen_server:start_link({global, ?SERVER}, ?MODULE, [], []).
 	
-find_messages(Addressee) ->
-	global:send(?SERVER, {find_msgs, Addressee, self()}),
-	receive
-		{ok, Messages} ->
-			Messages
+save_message(Addressee, Body) ->   
+	gen_server:call({global, ?SERVER}, {save_msg, Addressee, Body}).
+
+find_messages(Addressee) ->  
+	case gen_server:call({global, ?SERVER}, {find_msgs, Addressee}) of
+		{ok, Messages} -> Messages
 	end.
-
-start() ->
-	server_util:start(?SERVER, {?MODULE, run, [true]}).
 	
-stop() ->
-	server_util:stop(?SERVER).
+shutdown() ->
+	gen_server:call({global, ?SERVER}, stop).	
 	
-run(FirstTime) ->
-	if FirstTime == true ->
-		init_store(),
-		run(false);
-	   true ->
-			receive
-				{save_msg, Addressee, Body} ->
-					store_message(Addressee, Body),
-					run(FirstTime);
-				{find_msgs, Addressee, Pid} ->
-					Messages = get_messages(Addressee),
-					Pid ! {ok, Messages},
-					run(FirstTime);
-				shutdown ->
-					mnesia:stop(),
-					io:format("Shutting down...~n")
-			end
-	end.		
+%% gen_server callbacks
+%%-----------------------------------------------------------------------------
+%% Function: init(Args) -> {ok, State} 			|
+%% 						   {ok, State, Timeout} |
+%%						   ignore				|
+%%						   {stop, Reason}
+%% Description: Initiates the server
+%%-----------------------------------------------------------------------------
+init([]) -> 
+	init_store(),
+	{ok, #state{}}.	
+	
+%%-----------------------------------------------------------------------------
+%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State}	|
+%%										{reply, Reply, State, Timeout}		|
+%%										{noreply, State}					|
+%%										{noreply, State, Timeout}			|
+%%										{stop, Reason, Reply, State}		|
+%%										{stop, Reason, State}
+%% Description: Handling call messages
+%%-----------------------------------------------------------------------------
+handle_call({save_msg, Addressee, Body}, _From, State) ->
+	store_message(Addressee, Body),
+	{reply, ok, State};
+	
+handle_call({find_msgs, Addressee}, _From, State) ->
+	Messages = get_messages(Addressee),
+	{reply, {ok, Messages}, State};
+	
+handle_call(stop, _From, State) ->
+	mnesia:stop(),
+	{stop, normal, State};			
 
-delete_messages(Messages) ->
+handle_call(_Request, _From, State) ->
+	{reply, ignored_message, State}.
+	
+handle_cast(_Msg, State) ->
+	{noreply, State}.
+	
+handle_info(_Info, State) ->
+	{noreply, State}.
+	
+terminate(_Reason, _State) ->
+	ok.
+	
+code_change(_OldVsn, State, _Extra) ->
+	{ok, State}.
+	
+%% Internal functions
+store_message(Addressee, Body) ->
 	F = fun() ->
-			lists:foreach(fun(Msg) -> mnesia:delete_object(Msg) end, Messages) end,
+			{_, CreatedOn, _} = erlang:now(),
+			mnesia:write(#chat_message{addressee = Addressee, body = Body, created_on = CreatedOn}) end,
 	mnesia:transaction(F).
-
+	
 get_messages(Addressee) ->
 	F = fun() ->
 			Query = qlc:q([M || M <- mnesia:table(chat_message),
@@ -61,10 +101,9 @@ get_messages(Addressee) ->
 	{atomic, Messages} = mnesia:transaction(F),
 	Messages.
 
-store_message(Addressee, Body) ->
+delete_messages(Messages) ->
 	F = fun() ->
-			{_, CreatedOn, _} = erlang:now(),
-			mnesia:write(#chat_message{addressee = Addressee, body = Body, created_on = CreatedOn}) end,
+			lists:foreach(fun(Msg) -> mnesia:delete_object(Msg) end, Messages) end,
 	mnesia:transaction(F).
 	
 init_store() ->
@@ -77,4 +116,4 @@ init_store() ->
 			mnesia:create_table(chat_message, [{attributes, record_info(fields, chat_message)},
 											   {type, bag},
 											   {disc_copies, [node()]}]) 
-	end.
+	end.	

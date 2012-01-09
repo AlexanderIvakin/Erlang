@@ -14,7 +14,7 @@ send_message(Addressee, MessageBody) ->
 	message_router:send_chat_message(Addressee, MessageBody).  
 		
 start_router() ->
-	message_router:start().
+	message_router:start_link().
 	
 handle_messages(Nickname) ->
 	receive

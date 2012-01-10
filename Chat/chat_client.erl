@@ -1,5 +1,5 @@
 -module(chat_client).
--export([send_message/2, start_router/0,
+-export([send_message/2,
 		 register_nickname/1, unregister_nickname/1,
 		 handle_messages/1]).
 
@@ -13,8 +13,6 @@ unregister_nickname(Nickname) ->
 send_message(Addressee, MessageBody) ->
 	message_router:send_chat_message(Addressee, MessageBody).  
 		
-start_router() ->
-	message_router:start_link().
 	
 handle_messages(Nickname) ->
 	receive

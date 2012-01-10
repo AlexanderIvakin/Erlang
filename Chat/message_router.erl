@@ -32,7 +32,8 @@ shutdown() ->
 %% gen_server callback functions
 	
 init([]) -> 
-	message_store:start_link(),
+	process_flag(trap_exit, true),
+	io:format("~p (~p) starting...~n", [?MODULE, self()]),
 	{ok, dict:new()}.
 
 handle_call({send_chat_msg, ClientName, MessageBody}, _From, Clients) ->
